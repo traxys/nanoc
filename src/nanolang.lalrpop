@@ -1,0 +1,29 @@
+use crate::LexerError;
+use crate::Token;
+use crate::Expr;
+
+grammar<'input>(input: &'input str);
+
+extern {
+	type Location = usize;
+	type Error = LexerError<'input>;
+
+	enum Token<'input> {
+		"int" => Token::Int(<i64>),
+		"(" => Token::LParen,
+		")" => Token::RParen,
+		"{" => Token::LBrace,
+		"}" => Token::RBrace,
+		"," => Token::Comma,
+		"->" => Token::Arrow,
+		"=" => Token::Equals,
+		"id" => Token::Ident(<&'input str>),
+		";" => Token::Semicolon,
+		"_" => Token::Placeholder,
+	}
+}
+
+pub Expr: Expr<'input> = {
+	"id" => Expr::Ident(<>),
+	"int" => Expr::Int(<>),
+};
