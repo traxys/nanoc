@@ -1,6 +1,8 @@
 use crate::LexerError;
 use crate::Token;
 use crate::Expr;
+use crate::Param;
+use crate::Binding;
 
 grammar<'input>(input: &'input str);
 
@@ -20,11 +22,45 @@ extern {
 		"id" => Token::Ident(<&'input str>),
 		";" => Token::Semicolon,
 		"_" => Token::Placeholder,
+		"fn" => Token::Function,
 	}
 }
 
 pub Expr: Expr<'input> = {
 	"id" => Expr::Ident(<>),
 	"int" => Expr::Int(<>),
+	<lower:LowerExpr> => <>,
+	"fn" <id:"id"?> "(" <args:Bindings> ")" "->" "{" <expr:Expr> "}" => {
+	    Expr::FuncDefinition {
+        	name: id,
+        	bindings: args,
+        	body: Box::new(expr),
+    	}
+	},
+};
+LowerExpr: Expr<'input> = {
 	"(" <expr:Expr> ")" => <>,
+	<callee:Expr> "(" <args:Args> ")" => {
+		crate::desugar_call(callee, args)
+	}
+};
+
+Bindings = Comma<Binding>;
+Binding: Binding<'input> = "id" => Binding::Named(<>);
+
+Args = Comma<Arg>;
+Arg: Param<'input> = {
+	"_" => Param::Placeholder,
+	<expr:Expr> => Param::Expr(<>),
+};
+
+Comma<T>: Vec<T> = {
+    <v:(<T> ",")*> <e:T?> => match e {
+        None => v,
+        Some(e) => {
+            let mut v = v;
+            v.push(e);
+            v
+        }
+    }
 };
