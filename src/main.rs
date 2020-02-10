@@ -116,7 +116,7 @@ pub enum Expr<'i> {
 }
 
 fn main() {
-    let input = "42";
+    let input = "(42)";
     let lexer = Lexer::new(input);
     println!("{:?}", nanolang::ExprParser::new().parse(input, lexer));
 }

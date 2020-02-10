@@ -26,4 +26,5 @@ extern {
 pub Expr: Expr<'input> = {
 	"id" => Expr::Ident(<>),
 	"int" => Expr::Int(<>),
+	"(" <expr:Expr> ")" => <>,
 };
