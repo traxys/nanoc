@@ -1,0 +1,13 @@
+[package]
+name = "nanoc"
+version = "0.1.0"
+authors = ["Quentin Boyer <qbsecond@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+libnanoc = {path = "../libnanoc"}
+structopt = "0.3.9"
+memmap = "0.7.0"
+anyhow = "1.0.26"

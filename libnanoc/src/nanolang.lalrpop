@@ -1,6 +1,6 @@
 use crate::LexerError;
 use crate::Token;
-use crate::Expr;
+use crate::{UndecoratedTree, UndecoratedNode};
 use crate::Param;
 use crate::Binding;
 
@@ -26,19 +26,19 @@ extern {
 	}
 }
 
-pub Expr: Expr<'input> = {
-	"id" => Expr::Ident(<>),
-	"int" => Expr::Int(<>),
+pub Expr: UndecoratedTree<'input> = {
+	"id" => UndecoratedTree::from_node(UndecoratedNode::Ident(<>)),
+	"int" => UndecoratedTree::from_node(UndecoratedNode::Int(<>)),
 	<lower:LowerExpr> => <>,
 	"fn" <id:"id"?> "(" <args:Bindings> ")" "->" "{" <expr:Expr> "}" => {
-	    Expr::FuncDefinition {
+	    UndecoratedTree::from_node(UndecoratedNode::FuncDefinition {
         	name: id,
         	bindings: args,
         	body: Box::new(expr),
-    	}
+    	})
 	},
 };
-LowerExpr: Expr<'input> = {
+LowerExpr: UndecoratedTree<'input> = {
 	"(" <expr:Expr> ")" => <>,
 	<callee:Expr> "(" <args:Args> ")" => {
 		crate::desugar_call(callee, args)

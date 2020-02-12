@@ -1,5 +1,6 @@
 #![allow(unused_parens)]
 use logos::Logos;
+use std::collections::HashMap;
 
 #[macro_use]
 extern crate lalrpop_util;
@@ -118,11 +119,11 @@ impl<'i> Iterator for Lexer<'i> {
 
 #[derive(Debug)]
 pub enum Param<'i> {
-    Expr(Expr<'i>),
+    Expr(UndecoratedTree<'i>),
     Placeholder,
 }
 
-pub fn desugar_call<'i>(func: Expr<'i>, args: Vec<Param<'i>>) -> Expr<'i> {
+pub fn desugar_call<'i>(func: UndecoratedTree<'i>, args: Vec<Param<'i>>) -> UndecoratedTree<'i> {
     let mut new_args = Vec::new();
     let mut params = Vec::new();
     let mut current = 0;
@@ -131,23 +132,23 @@ pub fn desugar_call<'i>(func: Expr<'i>, args: Vec<Param<'i>>) -> Expr<'i> {
             Param::Expr(e) => new_args.push(e),
             Param::Placeholder => {
                 params.push(Binding::Unamed(current));
-                new_args.push(Expr::Unamed(current));
+                new_args.push(UndecoratedTree::from_node(UndecoratedNode::Unamed(current)));
                 current += 1;
             }
         }
     }
-    let call = Expr::Call {
+    let call = UndecoratedTree::from_node(UndecoratedNode::Call {
         func: Box::new(func),
         args: new_args,
-    };
+    });
     if params.is_empty() {
         call
     } else {
-        Expr::FuncDefinition {
+        UndecoratedTree::from_node(UndecoratedNode::FuncDefinition {
             name: None,
             bindings: params,
             body: Box::new(call),
-        }
+        })
     }
 }
 
@@ -157,24 +158,95 @@ pub enum Binding<'i> {
     Unamed(isize),
 }
 
+pub type UndecoratedTree<'i> = DecoratedTree<'i, ()>;
+pub type UndecoratedNode<'i> = DecoratedNode<'i, ()>;
+
 #[derive(Debug)]
-pub enum Expr<'i> {
+pub struct DecoratedTree<'i, T> {
+    decoration: T,
+    pub node: DecoratedNode<'i, T>,
+}
+
+impl<'i, T> DecoratedTree<'i, T> {
+    pub fn map_decoration<U>(self, f: &impl Fn(T) -> U) -> DecoratedTree<'i, U> {
+        DecoratedTree {
+            decoration: f(self.decoration),
+            node: self.node.map_decoration(f),
+        }
+    }
+}
+
+impl<'i> UndecoratedTree<'i> {
+    pub fn from_node(node: UndecoratedNode<'i>) -> Self {
+        UndecoratedTree {
+            decoration: (),
+            node,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum DecoratedNode<'i, T> {
     Unamed(isize),
     Ident(&'i str),
     Int(i64),
     Call {
-        func: Box<Expr<'i>>,
-        args: Vec<Expr<'i>>,
+        func: Box<DecoratedTree<'i, T>>,
+        args: Vec<DecoratedTree<'i, T>>,
     },
     FuncDefinition {
         name: Option<&'i str>,
         bindings: Vec<Binding<'i>>,
-        body: Box<Expr<'i>>,
+        body: Box<DecoratedTree<'i, T>>,
     },
 }
 
-fn main() {
-    let input = "fn id (i) -> {i}(_)(_)()";
+impl<'i, T> DecoratedNode<'i, T> {
+    fn map_decoration<U>(self, f: &impl Fn(T) -> U) -> DecoratedNode<'i, U> {
+        match self {
+            DecoratedNode::Unamed(i) => DecoratedNode::Unamed(i),
+            DecoratedNode::Ident(n) => DecoratedNode::Ident(n),
+            DecoratedNode::Int(v) => DecoratedNode::Int(v),
+            DecoratedNode::Call { func, args } => DecoratedNode::Call {
+                func: Box::new(func.map_decoration(f)),
+                args: args
+                    .into_iter()
+                    .map(|node| node.map_decoration(f))
+                    .collect(),
+            },
+            DecoratedNode::FuncDefinition {
+                name,
+                bindings,
+                body,
+            } => DecoratedNode::FuncDefinition {
+                name,
+                bindings,
+                body: Box::new(body.map_decoration(f)),
+            },
+        }
+    }
+}
+
+enum Type {
+    Int,
+    Function {
+        inputs: Vec<Type>,
+        output: Box<Type>,
+    },
+}
+
+struct Definition {
+    ty: Type,
+}
+
+struct Scope<'i, 'p> {
+    parent: Option<&'p Scope<'i, 'p>>,
+    scope: HashMap<Binding<'i>, Definition>,
+}
+
+pub fn parse(
+    input: &str,
+) -> Result<UndecoratedTree<'_>, lalrpop_util::ParseError<usize, Token<'_>, LexerError<'_>>> {
     let lexer = Lexer::new(input);
-    println!("{:?}", nanolang::ExprParser::new().parse(input, lexer));
+    nanolang::ExprParser::new().parse(input, lexer)
 }
