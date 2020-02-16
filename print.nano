@@ -1,0 +1,6 @@
+let main: () = {
+	let print_fun: (int) -> () = fn (x: int) -> {
+		print_int(x)
+	};
+	print_fun(10)
+}

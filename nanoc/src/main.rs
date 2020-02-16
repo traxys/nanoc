@@ -1,4 +1,5 @@
 use libnanoc::parse;
+use libnanoc::type_tree;
 use memmap::MmapOptions;
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -15,6 +16,8 @@ fn main() -> anyhow::Result<()> {
     let mmap = unsafe { MmapOptions::new().map(&file)? };
 
     let input = std::str::from_utf8(&mmap)?;
-    println!("Output: {:#?}", parse(input));
+    let parsed = parse(input).unwrap();
+    let typed = type_tree(parsed);
+    println!("Output: {:#?}", typed);
     Ok(())
 }

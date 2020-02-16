@@ -2,7 +2,8 @@ use crate::LexerError;
 use crate::Token;
 use crate::{UndecoratedTree, UndecoratedNode};
 use crate::Param;
-use crate::Binding;
+use crate::{Binding, BindingKind};
+use crate::Type;
 
 grammar<'input>(input: &'input str);
 
@@ -23,14 +24,41 @@ extern {
 		";" => Token::Semicolon,
 		"_" => Token::Placeholder,
 		"fn" => Token::Function,
+		"let" => Token::Let,
+		":" => Token::Colon,
+		"()" => Token::Unit,
 	}
 }
+
+pub Statement: UndecoratedTree<'input> = {
+	"let" <name:Binding> "=" <expr:Expr> => {
+		UndecoratedTree::from_node(UndecoratedNode::Bind {
+			name,
+			value: Box::new(expr),
+		})
+	},
+	"let" <name:Binding> "=" <expr:ExprList> => {
+		UndecoratedTree::from_node(UndecoratedNode::Bind {
+			name,
+			value: Box::new(expr),
+		})
+	},
+}
+
+pub ExprList: UndecoratedTree<'input> = {
+	"{" <statements:(<Statement> ";")*> <expr:Expr> "}" => {
+		UndecoratedTree::from_node(UndecoratedNode::List{
+			statements: statements,
+			expr: Box::new(expr),
+		})
+	},
+};
 
 pub Expr: UndecoratedTree<'input> = {
 	"id" => UndecoratedTree::from_node(UndecoratedNode::Ident(<>)),
 	"int" => UndecoratedTree::from_node(UndecoratedNode::Int(<>)),
 	<lower:LowerExpr> => <>,
-	"fn" <id:"id"?> "(" <args:Bindings> ")" "->" "{" <expr:Expr> "}" => {
+	"fn" <id:"id"?> "(" <args:Bindings> ")" "->" <expr:ExprList> => {
 	    UndecoratedTree::from_node(UndecoratedNode::FuncDefinition {
         	name: id,
         	bindings: args,
@@ -46,7 +74,25 @@ LowerExpr: UndecoratedTree<'input> = {
 };
 
 Bindings = Comma<Binding>;
-Binding: Binding<'input> = "id" => Binding::Named(<>);
+Binding: Binding<'input> = <id:"id"> ":" <ty:Type> => Binding {
+	kind: BindingKind::Named(id),
+	ty: Some(ty),
+};
+
+Type: Type = {
+	"()" => Type::Unit,
+	"id" => match <> {
+		"int" => Type::Int,
+		c => unimplemented!("No custom types possible: {}", c),
+	},
+	FunctionType => <>,
+};
+FunctionType: Type =
+"(" <inputs:Comma<Type>> ")" "->" <output:Type> => Type::Function {
+	inputs,
+	output: Box::new(output),
+};
+
 
 Args = Comma<Arg>;
 Arg: Param<'input> = {
